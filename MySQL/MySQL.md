@@ -261,3 +261,41 @@ MySQL提供了两个方法来处理ip地址。
 还有可以在SQL前使用EXPLAIN来查看优化器如何执行语句。如果type出现ALL，就是全盘扫描，需要优化。而key如果是NULL，说明没走索引。rows是预估扫描的行数，越小越好。额外信息中如果有Using filesort，说明需要进行额外的排序，需要优化，或者Using temporary说明使用临时表，需要优化。
 
 如果没走索引，那么就可以查询条件来创建索引或者使用覆盖索引来避免回表，以及优化SQL语句，避免使用`SELECT *`，使用具体字段来查找。
+
+# 19. 为什么MySQL的表需要使用InnoDB来存储
+
+InnoDB最主要是有ACID特性，支持事务。而MyISAM不支持事务，无法保证多个同时操作的安全性。
+
+InnoDB提供行级锁，能够只锁一行数据，但MyISAM只有表级锁，容易冲突，性能低。
+
+InnoDB有redo log，在宕机后能够进行数据恢复。
+
+# 20. 数据库三大范式
+
+1. 数据库的每一列都是不可分割的原子数据项。
+2. 非主键属性必须完全依赖主键。比如选课表存在学生id和课程id为主键，如果还有学生姓名，学生姓名只依赖于学生id，就导致一个学生选两门课，就需要在选课表中重复存储学生姓名两次。需要拆为学生表和选课表。
+3. 任何非主键属性不依赖于其他非主键属性。比如学生表中有班主任姓名和班主任年龄，这两个非主键存在依赖关系，需要拆为学生表和班主任表，在班主任表中将班主任姓名和班主任年龄与班主任id联系起来。
+
+# 21. 连表查询
+
+连表查询主要有四种。
+
+1. 内连接INNER JOIN。只返回两个表中完全匹配的行。
+
+```mysql
+SELECT s.name, c.class_name
+FROM students s
+INNER JOIN classes c ON s.class_id = c.id;
+```
+
+只有s.class_id和c.id值相同的数据行才会列出来。
+
+2. 左外连接LEFT JOIN。返回左表的所有行以及右表匹配的行。
+
+```mysql
+SELECT s.name, c.class_name
+FROM student s
+LEFT JOIN classes c ON s.class_id = c.id;
+```
+
+这里会列出所有学生数据，如果s.class_id 与c.id不匹配，只会显示NULL，否则会显示c.id对应的c.class_name。
