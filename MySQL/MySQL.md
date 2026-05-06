@@ -189,8 +189,6 @@ MySQL主要有三个日志。
 
 ## 16.1 什么是事务
 
-事务是逻辑上的一组操作，要么都执行，要么都不执行。
-
 数据库事务就是用来保证多个对数据库的操作组成一个整体，要么全部执行，要么全部不执行。
 
 ```mysql
@@ -203,10 +201,10 @@ COMMIT # 提交事务
 
 ## 16.2 事务的ACID特性
 
-1. 原子性。事务是最小的执行单位，原子性保证事务要么全部完成，要么全部不完成。主要依靠Undo Log来实现回滚。
-2. 一致性。执行事务前后，数据需要保证一致，也就是预设的约束以及业务逻辑的一致性。比如转账前后，两人的总额不变。这是ACID的最终目的。
+1. 原子性。事务操作要么全部完成，要么全部不完成。发生错误靠Undo Log来实现回滚。
+2. 一致性。执行事务前后，必须从一个合法状态变成另一个合法状态。比如转账前后，两人的总额不变。这是ACID的最终目的。
 3. 隔离性。并发访问数据库时，事务之间不会互相干扰。
-4. 持久性。事务被提交后，对数据库的修改是持久的。
+4. 持久性。事务被提交后，对数据库的修改是持久的。如果数据库发生异常，会通过redo log来保证数据持久化。
 
 ## 16.3 并发事务的问题
 
@@ -299,3 +297,24 @@ LEFT JOIN classes c ON s.class_id = c.id;
 ```
 
 这里会列出所有学生数据，如果s.class_id 与c.id不匹配，只会显示NULL，否则会显示c.id对应的c.class_name。
+
+3. 右外连接RIGHT JOINT。返回右表所有行以及右表匹配de
+4. 全外连接FULL OUTER JOIN。左外连接和右外连接的总和。
+
+# 22. Drop，Delete和Truncate
+
+Drop用于删除整个数据表，Delete用于删除数据表中满足条件的行数据，Truncate用于清空整张表。Delete属于DML，数据操作语言，Truncate数据DDL，数据定义语言。删除的效率Truncate较高。
+
+# 23. TIMESTAMP字段有什么用
+
+建表是如果指定字段类型为timestamp，那么数据行发生修改时，这个字段就会自动填入时间。
+
+```mysql
+CREATE TABLE example_table(
+	id INT PRIMARY KEY,
+    create_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+# 24. 

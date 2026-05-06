@@ -805,3 +805,166 @@ Java是一次编译，到处运行的。因为编译后的class文件可以在JV
 但也存在一些问题。比如本地方法，不同的系统本地方法不同，所以如果调用了特定平台的本地方法，其他平台的不一定能用。
 
 还有操作系统的问题，如Windows文件路径用反斜杠，Linux用正斜杠，这种也是会出问题的。为了避免这些问题，最好的方法就是用Docker部署，确保运行环境一样就没有问题了。
+
+# 79. LocalStorage
+
+LocalStorage是Web的存储API，能够让Web程序在浏览器中以键值对的方式保存数据。
+
+LocalStorage的数据没有过期时间。只有通过显式删除或者清空缓存才能删除数据。LocalStorage的数据是按协议+域名+端口的方式隔离的，不同的协议、域名和端口访问到的localStorage不同。
+
+```java
+localStorage.setItem('username', '张三');
+let user = localStorage.getItem('username');
+localStorage.removeItem('username');
+localStorage.clear();
+```
+
+# 80. WebSocket
+
+普通的HTTP请求是单工或者半双工的方式通信，由于需要一开始的握手，延迟会比较高。而使用WebSocket能够实现全双工通信，只要收到数据就能立刻传输，延迟低。而且HTTP请求需要在请求头携带数据，本身是无状态的。而WebSocket建立持久连接后，就有状态。
+
+首先需要配置webSocket节点。
+
+```java
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.socket.config.annotation.EnableWebSocket;
+import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
+
+@Configuration
+@EnableWebSocket
+public class WebSocketConfig implements WebSocketConfigurer {
+    @Override
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        // 注册处理类，并允许跨域
+        registry.addHandler(new OrderStatusHandler(), "/ws/order/{userId}").setAllowedOrigins("*");
+    }
+}
+```
+
+然后在Handler中保存连接并发送消息。
+
+```java
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class OrderStatusHandler extends TextWebSocketHandler {
+
+    // 用来存放每个用户的 Session，实际开发中建议配合 Redis
+    private static final ConcurrentHashMap<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
+	
+    @Override
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        // 从路径截取 userId，建立映射
+        String uri = session.getUri().toString();
+        String userId = uri.substring(uri.lastIndexOf('/') + 1);
+        sessions.put(userId, session);
+        System.out.println("用户 " + userId + " 已上线");
+    }
+
+    // 模拟服务端主动推送的方法
+    public static void sendOrderStatus(String userId, String status) throws Exception {
+        WebSocketSession session = sessions.get(userId);
+        if (session != null && session.isOpen()) {
+            session.sendMessage(new TextMessage("您的订单状态更新为: " + status));
+        }
+    }
+}
+```
+
+> 用户上限后，会在ConcurrentHashMap中添加关于userId的会话。那么只要调用sendOrderStatus方法，就会通知用户。
+
+```java
+@Service
+public class OrderService {
+    public void updateStatus(String orderId, String userId, String newStatus) {
+        // 1. 修改数据库状态...
+        
+        // 2. 推送实时消息
+        try {
+            OrderStatusHandler.sendOrderStatus(userId, newStatus);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+> 在service层中修改了订单数据，然后在try中调用这个推送方法。
+
+```js
+const userId = "12345";
+const socket = new WebSocket(`ws://localhost:8080/ws/order/${userId}`);
+
+// 监听连接成功
+socket.onopen = () => {
+    console.log("WebSocket 连接已开启，准备接收订单更新...");
+};
+
+// 监听服务器发来的消息
+socket.onmessage = (event) => {
+    console.log("收到推送消息: ", event.data);
+    alert(event.data); // 弹出提示：您的订单状态更新为: 骑手已出发
+};
+
+// 监听连接关闭
+socket.onclose = () => {
+    console.log("连接已关闭");
+};
+```
+
+> 前端通过new WebSocket开启新的WebSocket连接，然后通过socket.onmessage来监听，收到消息就通过alert来提醒用户。
+
+# 81. HttpClient
+
+HttpClient是客户端编程接口，能够用来发送GET、PUT等请求。
+
+```java
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
+public class WeChatLoginService {
+
+    // 微信接口地址
+    private static final String WECHAT_TOKEN_URL = "https://api.weixin.qq.com/sns/oauth2/access_token";
+    
+    private static final String APP_ID = "YOUR_APP_ID";
+    private static final String APP_SECRET = "YOUR_APP_SECRET";
+
+    // 创建一个全局通用的 HttpClient 实例（建议单例，提高性能）
+    private static final HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+
+    public String getWeChatAccessToken(String code) throws Exception {
+        // 1. 构建请求 URL
+        String url = String.format("%s?appid=%s&secret=%s&code=%s&grant_type=authorization_code",
+                WECHAT_TOKEN_URL, APP_ID, APP_SECRET, code);
+
+        // 2. 创建 HttpRequest
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .GET() // 微信获取 token 使用的是 GET 请求
+                .header("Accept", "application/json")
+                .build();
+
+        // 3. 发送请求并接收响应
+        // HttpResponse.BodyHandlers.ofString() 会将响应体直接转为字符串
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // 4. 处理结果
+        if (response.statusCode() == 200) {
+            System.out.println("微信返回原始 JSON: " + response.body());
+            return response.body(); // 这里通常会用 Jackson 或 Gson 解析成对象
+        } else {
+            throw new RuntimeException("微信接口请求失败，状态码: " + response.statusCode());
+        }
+    }
+}
+```
+
