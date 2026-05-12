@@ -1185,3 +1185,81 @@ func main() {
 ```
 
 # 42. 单元测试
+
+如果要对`math.go`文件的`Add`方法进行测试，测试需要满足三个要求。
+
+1. 测试文件需要以`_test`结尾。测试`math.go`，那么测试文件的名称必须是`math_test.go`。
+2. 测试文件与被测试文件必须位于同一个包中。
+3. 测试函数必须以Test开头。`math_test.go`的测试方法必须写成`TestA`dd，才能测试`math.go`中的`Add`方法。
+
+```go
+func TestAdd(t *testing.T) {
+    got := Add(3, 2)
+    want := 5
+    if got != want {
+        t.Errorf("Add(%d, %d) = %d; want %d", 3, 2, got, want)
+    }
+}
+```
+
+如果测试用例过多，可以将这些测试用例放到切片中，通过range循环来获取每一个用例，对每一个用例进行测试。
+
+运行测试的方法是`go test`，会运行当前目录下的所有测试。`go test -v`会打印详细信息，`go test -run TestAdd`会运行指定的测试函数，`go test -cover`会看到测试使用了被测试文件的多少代码。
+
+而`*testing.T`有很多方法来报告测试结果。
+
+`t.Log`用来输出日志，只有测试失败或者`-v`参数时显示。
+
+`t.Error`输出错误，报告测试失败，但依然会执行后续代码。
+
+`t.Fatal`会报告测试失败，终止测试。
+
+`t.Skip`用来跳过，满足条件才会测试。
+
+`t.Helper`。辅助函数，如果出错，就会打印调用者的行号，而不是指向`t.Errorf`的行。
+
+最好的错误打印信息是`t.Errorf("Add(%d, %d) = %d, want %d", addend, augend, got, want)`，显示完整信息。
+
+最好的做法是前置条件用`t.Fatalf`，类似打不开数据库、连接不上Redis等，不需要执行后续的代码。
+
+## 42.1 子测试
+
+在表格驱动测试中，可以只运行其中的部分数据。
+
+```go
+func TestSplit(t *testing.T) {
+    type testCase struct {
+        input string
+        sep   string
+        want  []string
+    }
+    
+    tests := map[string]testCase{
+        "simple":     {input: "a:b:c", sep: ":", want: []string{"a", "b", "c"}},
+        "wrong_sep":  {input: "a:b:c", sep: ",", want: []string{"a:b:c"}},
+        "multi_char": {input: "abcd", sep: "bc", want: []string{"a", "d"}},
+    }
+    
+    for name, tc := range tests {
+        t.Run(name, func(t *testing.T) {
+            got := Split(tc.input, tc.sep)
+            if !reflect.DeepEqual(got, tc.want) {
+                t.Errorf("expected: %v, got: %v", tc.want, got)
+            }
+        })
+    }
+}
+```
+
+这里定义了多个testCase，而存在名字simple、wrong_sep等。可以通过`go test -run TestSplit/simple -v`来单独运行子测试。
+
+## 42.2 并行测试
+
+并行测试是在方法里调用`t.Parallel()`这样能够让当前的测试暂停，执行接下来非并行的测试，然后将所有有`t.Parallel`的方法一起运行。
+
+# 43. Go命令
+
+Go文件需要先编译再执行。通常有两种方法。
+
+1. `go build`编译成二进制文件，然后执行文件。
+2. `go run`运行go文件。
